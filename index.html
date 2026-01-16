@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Playwright Viewer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="container" id="main-container">
+      <div class="input-wrapper" id="input-wrapper">
+        <div class="drop-zone" id="drop-zone">
+          <div class="drop-zone-content">
+            <div class="drop-zone-icon">📦</div>
+            <div class="drop-zone-text">Drop a Playwright report ZIP file here</div>
+
+            <div class="button-wrapper">
+              <button class="upload-btn" id="upload-btn">Select ZIP...</button> or
+              <div class="url-section" id="url-section">
+                <div class="url-input-group">
+                  <input
+                    type="text"
+                    class="url-input"
+                    id="url-input"
+                    placeholder="Enter ZIP file URL..."
+                  />
+                  <button class="url-load-btn" id="url-load-btn">Load</button>
+                </div>
+              </div>
+            </div>
+            <div class="error" id="error">
+              <p id="error-message"></p>
+            </div>
+          </div>
+
+          <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div id="loading-text">Extracting report...</div>
+          </div>
+
+          <footer class="footer">
+            <p><strong>Playwright Report Viewer</strong></p>
+            <p class="footer-options">
+              Exract and view Playwright reports in the browser. Serves traces locally. <br />
+              Drag & drop ZIP · Upload · Load from URL · <code>?url=</code> parameter
+            </p>
+            <p class="privacy">All processing happens locally. No data is uploaded.</p>
+          </footer>
+        </div>
+      </div>
+    </div>
+
+    <button class="back-button" id="back-button">← Back to Viewer</button>
+    <iframe class="report-frame" id="report-frame"></iframe>
+    <input type="file" id="file-input" accept=".zip" />
+
+    <script type="module" src="script.js"></script>
+  </body>
+</html>
