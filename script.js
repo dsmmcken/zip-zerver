@@ -1,27 +1,27 @@
 const MIME_TYPES = {
-  'html': 'text/html',
-  'htm': 'text/html',
-  'css': 'text/css',
-  'js': 'application/javascript',
-  'mjs': 'application/javascript',
-  'json': 'application/json',
-  'png': 'image/png',
-  'jpg': 'image/jpeg',
-  'jpeg': 'image/jpeg',
-  'gif': 'image/gif',
-  'svg': 'image/svg+xml',
-  'webp': 'image/webp',
-  'ico': 'image/x-icon',
-  'webm': 'video/webm',
-  'mp4': 'video/mp4',
-  'woff': 'font/woff',
-  'woff2': 'font/woff2',
-  'ttf': 'font/ttf',
-  'eot': 'application/vnd.ms-fontobject',
-  'zip': 'application/zip',
-  'txt': 'text/plain',
-  'xml': 'application/xml',
-  'map': 'application/json'
+  html: 'text/html',
+  htm: 'text/html',
+  css: 'text/css',
+  js: 'application/javascript',
+  mjs: 'application/javascript',
+  json: 'application/json',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  svg: 'image/svg+xml',
+  webp: 'image/webp',
+  ico: 'image/x-icon',
+  webm: 'video/webm',
+  mp4: 'video/mp4',
+  woff: 'font/woff',
+  woff2: 'font/woff2',
+  ttf: 'font/ttf',
+  eot: 'application/vnd.ms-fontobject',
+  zip: 'application/zip',
+  txt: 'text/plain',
+  xml: 'application/xml',
+  map: 'application/json',
 };
 
 function getMimeType(filename) {
@@ -36,13 +36,16 @@ let createdBlobUrls = [];
 const dropZone = document.getElementById('drop-zone');
 const loading = document.getElementById('loading');
 const loadingText = document.getElementById('loading-text');
-const errorDiv = document.getElementById('error');
-const errorMessage = document.getElementById('error-message');
-const reportFrame = document.getElementById('report-frame');
+let reportFrame = document.getElementById('report-frame');
 const mainContainer = document.getElementById('main-container');
 const fileInput = document.getElementById('file-input');
 const inputWrapper = document.getElementById('input-wrapper');
 const uploadBtn = document.getElementById('upload-btn');
+
+// Clean up stale history state from a previous session (page was reloaded)
+if (history.state?.page) {
+  history.replaceState(null, '');
+}
 
 // Upload button handler
 uploadBtn.addEventListener('click', () => fileInput.click());
@@ -101,24 +104,76 @@ function loadReport(url) {
 }
 
 // Handle browser back/forward with popstate
+let ignoreNextPopstate = false;
+
 window.addEventListener('popstate', (event) => {
+  if (ignoreNextPopstate) {
+    ignoreNextPopstate = false;
+    return;
+  }
+
+  // Abort any ongoing animation
+  window.dragOverlay?.abort();
+
   if (event.state?.page === 'report' && hasReportLoaded) {
     // Forward navigation - just show the iframe (content still there)
     showReportView();
+  } else if (event.state?.page === 'report') {
+    // Stale report entry (page reloaded, report lost) — neuter and retreat
+    history.replaceState({ page: 'home' }, '');
+    ignoreNextPopstate = true;
+    history.back();
   } else {
     // Back navigation - show home
     returnToViewer();
   }
 });
 
+let errorTimeout = null;
+const errorMessage = document.getElementById('error-message');
+
+// Click to dismiss error state
+dropZone.addEventListener('click', () => {
+  if (dropZone.classList.contains('error-state')) {
+    hideError();
+  }
+});
+
 function showError(message) {
+  window.dragOverlay?.abort();
   loading.classList.remove('active');
-  errorDiv.classList.add('active');
-  errorMessage.innerHTML = message;
+
+  // Clear any existing timeout
+  if (errorTimeout) {
+    clearTimeout(errorTimeout);
+    errorTimeout = null;
+  }
+
+  errorMessage.textContent = message;
+  dropZone.classList.add('error-state');
+
+  // Auto-revert after 3.5 seconds
+  errorTimeout = setTimeout(() => {
+    hideError();
+  }, 3500);
 }
 
 function hideError() {
-  errorDiv.classList.remove('active');
+  if (!dropZone.classList.contains('error-state')) return;
+
+  // Add dismissing class to enable transitions for fade-out
+  dropZone.classList.add('error-dismissing');
+  dropZone.classList.remove('error-state');
+
+  // Clean up after transition
+  setTimeout(() => {
+    dropZone.classList.remove('error-dismissing');
+  }, 300);
+
+  if (errorTimeout) {
+    clearTimeout(errorTimeout);
+    errorTimeout = null;
+  }
 }
 
 function showLoading(text) {
@@ -136,12 +191,19 @@ function normalizePath(basePath, relativePath) {
   if (relativePath.startsWith('/')) {
     return relativePath.substring(1);
   }
-  if (relativePath.startsWith('http://') || relativePath.startsWith('https://') || relativePath.startsWith('data:') || relativePath.startsWith('blob:')) {
+  if (
+    relativePath.startsWith('http://') ||
+    relativePath.startsWith('https://') ||
+    relativePath.startsWith('data:') ||
+    relativePath.startsWith('blob:')
+  ) {
     return null; // External URL, don't process
   }
 
   // Get directory of base path
-  const baseDir = basePath.includes('/') ? basePath.substring(0, basePath.lastIndexOf('/') + 1) : '';
+  const baseDir = basePath.includes('/')
+    ? basePath.substring(0, basePath.lastIndexOf('/') + 1)
+    : '';
 
   // Combine and normalize
   let combined = baseDir + relativePath;
@@ -165,19 +227,39 @@ function normalizePath(basePath, relativePath) {
 
 async function handleFile(file) {
   if (!file.name.endsWith('.zip')) {
-    showError('Please drop a ZIP file containing a Playwright report.');
+    showError('Please drop a ZIP file.');
     return;
   }
 
   try {
-    showLoading('Loading zip.js library...');
+    // Clean up previous blob URLs and state
+    for (const url of createdBlobUrls) {
+      URL.revokeObjectURL(url);
+    }
+    createdBlobUrls = [];
+    window.__zipBlobUrls = null;
+    window.__currentVirtualPath = null;
+
+    // Replace iframe to purge its history entries from previous zips
+    const oldFrame = reportFrame;
+    const newFrame = oldFrame.cloneNode(false);
+    newFrame.removeAttribute('src');
+    oldFrame.parentNode.replaceChild(newFrame, oldFrame);
+    reportFrame = newFrame;
+
+    // Start zipper animation if available (drag drop case), otherwise show loading
+    const animationStarted = window.dragOverlay?.startUnzip() ?? false;
+    if (!animationStarted) {
+      showLoading('Loading zip.js library...');
+    }
 
     // Dynamically load zip.js
-    const { BlobReader, BlobWriter, ZipReader } = await import(
-      'https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.34/+esm'
-    );
+    const { BlobReader, BlobWriter, ZipReader } =
+      await import('https://cdn.jsdelivr.net/npm/@zip.js/zip.js@2.7.34/+esm');
 
-    showLoading('Reading ZIP file...');
+    if (!animationStarted) {
+      showLoading('Reading ZIP file...');
+    }
 
     // Extract the zip
     const zipReader = new ZipReader(new BlobReader(file));
@@ -210,7 +292,8 @@ async function handleFile(file) {
       }
     }
 
-    showLoading(`Extracting ${entries.length} files...`);
+    // Count non-directory entries for progress
+    const totalFiles = entries.filter((e) => !e.directory).length;
 
     // Second pass: extract files
     let extracted = 0;
@@ -240,25 +323,30 @@ async function handleFile(file) {
         }
 
         extracted++;
-        if (extracted % 50 === 0) {
-          showLoading(`Extracting files... (${extracted}/${entries.length})`);
-        }
+        // Update animation progress
+        window.dragOverlay?.setProgress(extracted / totalFiles);
       }
     }
 
     await zipReader.close();
 
     if (!indexPath) {
-      showError('No index.html found in the ZIP file. Is this a valid Playwright report?');
+      showError('No index.html found in the ZIP file. Is this a valid static site?');
       return;
     }
 
-    showLoading('Processing report...');
-
     // Create the URL/fetch patching script to inject
-    function createPatchScript(urlMap) {
-      const mapJson = JSON.stringify(Object.fromEntries(urlMap));
-      return `
+    function createPatchScript(urlMap, htmlPath) {
+      // Filter out HTML entries — their blob URLs become stale after processing
+      const filteredMap = new Map();
+      for (const [key, value] of urlMap) {
+        if (!key.toLowerCase().endsWith('.html') && !key.toLowerCase().endsWith('.htm')) {
+          filteredMap.set(key, value);
+        }
+      }
+      const mapJson = JSON.stringify(Object.fromEntries(filteredMap));
+      return (
+        `
 <script>
 (function() {
   const blobUrlMap = ${mapJson};
@@ -296,7 +384,12 @@ async function handleFile(file) {
   }
 
   // Track current "virtual" path for relative resolution
-  window.__virtualPath = 'index.html';
+  window.__virtualPath = ${JSON.stringify(htmlPath)};
+  try {
+    if (window.parent && window.parent !== window && window.parent.__currentVirtualPath) {
+      window.__virtualPath = window.parent.__currentVirtualPath;
+    }
+  } catch(e) {}
 
   // Patch fetch
   const originalFetch = window.fetch;
@@ -397,7 +490,11 @@ async function handleFile(file) {
           const value = el.getAttribute(attr);
           if (value && !value.startsWith('blob:') && !value.startsWith('data:') && !value.startsWith('http')) {
             const resolved = resolvePath(value, window.__virtualPath);
-            if (resolved && blobUrlMap[resolved]) {
+            // Skip rewriting href on anchors pointing to HTML files (handled by click interceptor)
+            if (resolved && attr === 'href' && el.tagName === 'A' &&
+                (resolved.toLowerCase().endsWith('.html') || resolved.toLowerCase().endsWith('.htm'))) {
+              // leave as-is for click interceptor
+            } else if (resolved && blobUrlMap[resolved]) {
               el.setAttribute(attr, blobUrlMap[resolved]);
             }
           }
@@ -412,6 +509,11 @@ async function handleFile(file) {
                 const value = el.getAttribute && el.getAttribute(attr);
                 if (value && !value.startsWith('blob:') && !value.startsWith('data:') && !value.startsWith('http')) {
                   const resolved = resolvePath(value, window.__virtualPath);
+                  // Skip rewriting href on anchors pointing to HTML files (handled by click interceptor)
+                  if (resolved && attr === 'href' && el.tagName === 'A' &&
+                      (resolved.toLowerCase().endsWith('.html') || resolved.toLowerCase().endsWith('.htm'))) {
+                    return; // leave as-is for click interceptor
+                  }
                   if (resolved && blobUrlMap[resolved]) {
                     el.setAttribute(attr, blobUrlMap[resolved]);
                   }
@@ -435,8 +537,42 @@ async function handleFile(file) {
     attributes: true,
     attributeFilter: ['src', 'href']
   });
+
+  // Click interceptor for HTML-to-HTML navigation
+  document.addEventListener('click', function(e) {
+    var anchor = e.target;
+    while (anchor && anchor.tagName !== 'A') anchor = anchor.parentElement;
+    if (!anchor) return;
+    var href = anchor.getAttribute('href');
+    if (!href || href.startsWith('blob:') || href.startsWith('http') ||
+        href.startsWith('#') || href.startsWith('data:') || href.startsWith('javascript:') ||
+        href.startsWith('mailto:') || href.startsWith('tel:')) return;
+
+    // Strip hash/query for resolution
+    var pathPart = href.split('#')[0].split('?')[0];
+    var resolved = resolvePath(pathPart, window.__virtualPath);
+    if (!resolved) return;
+    if (!resolved.toLowerCase().endsWith('.html') && !resolved.toLowerCase().endsWith('.htm')) return;
+
+    // Look up blob URL from parent's live map
+    var blobUrl = null;
+    try {
+      if (window.parent && window.parent !== window && window.parent.__zipBlobUrls)
+        blobUrl = window.parent.__zipBlobUrls[resolved];
+    } catch(e2) {}
+
+    if (blobUrl) {
+      e.preventDefault();
+      e.stopPropagation();
+      try { window.parent.__currentVirtualPath = resolved; } catch(e3) {}
+      // Preserve hash and query from original href
+      var suffix = href.substring(pathPart.length);
+      window.location.href = blobUrl + suffix;
+    }
+  }, true); // capture phase
 })();
-</` + `script>`;
+</` + `script>`
+      );
     }
 
     // Process HTML and CSS files to rewrite URLs
@@ -447,10 +583,17 @@ async function handleFile(file) {
       // Rewrite URLs in HTML
       let processed = text;
 
-      // Replace src attributes
+      // Replace src attributes (skip href for HTML files — handled by click interceptor)
       processed = processed.replace(/(src|href)=(["'])([^"']+)\2/gi, (match, attr, quote, url) => {
         const resolved = normalizePath(htmlPath, url);
         if (resolved && blobUrls.has(resolved)) {
+          // Leave HTML hrefs as relative paths for the click interceptor
+          if (
+            attr.toLowerCase() === 'href' &&
+            (resolved.toLowerCase().endsWith('.html') || resolved.toLowerCase().endsWith('.htm'))
+          ) {
+            return match;
+          }
           return `${attr}=${quote}${blobUrls.get(resolved)}${quote}`;
         }
         return match;
@@ -483,7 +626,7 @@ async function handleFile(file) {
       });
 
       // Inject the patch script right after <head>
-      const patchScript = createPatchScript(blobUrls);
+      const patchScript = createPatchScript(blobUrls, htmlPath);
       if (processed.includes('<head>')) {
         processed = processed.replace('<head>', '<head>' + patchScript);
       } else if (processed.includes('<HEAD>')) {
@@ -525,24 +668,45 @@ async function handleFile(file) {
       }
     }
 
-    // Process index.html
-    const processedHtml = await processHtml(indexPath, blobUrls);
+    // Process ALL HTML files
+    for (const [path, blob] of files) {
+      if (path.toLowerCase().endsWith('.html') || path.toLowerCase().endsWith('.htm')) {
+        const processedHtml = await processHtml(path, blobUrls);
+        const newBlob = new Blob([processedHtml], { type: 'text/html' });
+        const newUrl = URL.createObjectURL(newBlob);
+        URL.revokeObjectURL(blobUrls.get(path));
+        blobUrls.set(path, newUrl);
+        createdBlobUrls.push(newUrl);
+      }
+    }
 
-    // Create blob URL for processed HTML
-    const htmlBlob = new Blob([processedHtml], { type: 'text/html' });
-    const htmlUrl = URL.createObjectURL(htmlBlob);
-    createdBlobUrls.push(htmlUrl);
+    // Set live blob URL map on parent window for click interceptor
+    window.__zipBlobUrls = Object.fromEntries(blobUrls);
+    window.__currentVirtualPath = indexPath;
 
-    // Show the report
-    hideLoading();
-    loadReport(htmlUrl);
-
-    // Push history state for back/forward navigation
+    // Clear any stale forward/back state and push a fresh entry
+    history.replaceState({ page: 'home' }, '');
     history.pushState({ page: 'report' }, '');
 
+    if (animationStarted) {
+      // Set up load listener for animation reveal
+      reportFrame.onload = () => {
+        window.dragOverlay?.complete();
+      };
+
+      // Hide main container (will be shown by reveal animation)
+      mainContainer.style.display = 'none';
+
+      // Set the iframe src - the reveal animation will make it visible
+      hasReportLoaded = true;
+      reportFrame.src = blobUrls.get(indexPath);
+    } else {
+      // No animation - show report directly
+      hideLoading();
+      loadReport(blobUrls.get(indexPath));
+    }
   } catch (err) {
     console.error('Error:', err);
     showError(`Failed to load report: ${err.message}`);
   }
 }
-

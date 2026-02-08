@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Playwright Viewer</title>
+    <title>Zip Zerver - Site Viewer</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -14,20 +14,20 @@
   </head>
   <body>
     <div class="top-buttons">
-      <button class="upload-btn" id="upload-btn">Select ZIP...</button>
-      <button class="why-button" popovertarget="why-popover">why?</button>
+      <button class="upload-btn" id="upload-btn">Select zip...</button>
+      <button class="why-button" popovertarget="why-popover">About</button>
     </div>
     <div id="why-popover" popover>
-      <p><strong>Playwright Report Viewer</strong></p>
+      <p><strong>Why not just open the file?</strong></p>
       <p class="popover-options">
-        Extract and view Playwright reports in the browser. Serves traces locally.
+        Website archives like Playwright reports with traces need to be served from an actual web
+        server, not a <code>file://</code> URL, to work properly. This tool serves your ZIP contents
+        locally in the browser.
       </p>
-      <p class="popover-features">
-        Drag & drop ZIP · Upload · Load from URL · <code>?url=</code> parameter
-      </p>
-      <p class="popover-privacy">All processing happens locally. No data is uploaded.</p>
+      <p class="popover-features">Drag, drop, preview.</p>
+      <p class="popover-privacy">All processing happens locally. No data leaves your browser.</p>
       <p class="popover-link">
-        <a href="https://github.com/dsmmcken/playwright-zip-viewer" target="_blank">GitHub</a>
+        <a href="https://github.com/dsmmcken/zip-zerver" target="_blank">GitHub</a>
       </p>
     </div>
 
@@ -41,10 +41,11 @@
                 A client-side service worker for viewing zipped website archives.
               </text>
             </svg>
+          </div>
 
-            <div class="error" id="error">
-              <p id="error-message"></p>
-            </div>
+          <div class="error-face">
+            <div class="error-face-emoji">•`_´•</div>
+            <div class="error-face-message" id="error-message"></div>
           </div>
 
           <footer class="footer">Drag & drop ZIP. No data leaves your browser.</footer>

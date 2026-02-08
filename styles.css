@@ -1,7 +1,5 @@
 :root {
   --color-scale-black: #000000;
-  --color-scale-white: #ffffff;
-  --color-scale-gray-0: #f5f5f5;
   --color-scale-gray-1: #cccccc;
   --color-scale-gray-2: #b3b3b3;
   --color-scale-gray-3: #8c8c8c;
@@ -9,17 +7,10 @@
   --color-scale-gray-5: #4d4d4d;
   --color-scale-gray-6: #333333;
   --color-scale-gray-7: #262626;
-  --color-scale-gray-8: #1a1a1a;
   --color-scale-gray-9: #0d0d0d;
-  --color-scale-blue-0: #cae8ff;
-  --color-scale-blue-1: #a5d6ff;
   --color-scale-blue-2: #79c0ff;
   --color-scale-blue-3: #58a6ff;
   --color-scale-blue-4: #388bfd;
-  --color-scale-blue-5: #1f6feb;
-  --color-scale-blue-6: #1158c7;
-  --color-scale-blue-7: #0d419d;
-  --color-scale-blue-8: #0c2d6b;
   --color-scale-blue-9: #051d4d;
   --color-scale-red-4: #f85149;
   --color-scale-red-9: #490202;
@@ -96,10 +87,6 @@ body:has(.report-frame.active) #drag-overlay-canvas {
 .drop-zone.drag-over {
   background: var(--color-scale-blue-9);
   border-color: var(--color-scale-blue-4);
-}
-
-.drop-zone.drag-over .button-wrapper {
-  opacity: 0.2;
 }
 
 .drop-zone-content {
@@ -243,23 +230,74 @@ body:has(.report-frame.active) #drag-overlay-canvas {
   }
 }
 
-.error {
-  display: none;
-  background: var(--color-scale-red-9);
-  border: 1px solid var(--color-scale-red-4);
-  border-radius: 6px;
-  padding: 12px 20px;
-  max-width: 500px;
+/* Error State */
+.drop-zone.error-state {
+  background: color(display-p3 0.72 0.07 0.03);
+  border-color: color(display-p3 0.85 0.20 0.15);
+  cursor: pointer;
+}
+
+.drop-zone.error-dismissing {
+  transition: background 0.3s ease;
+}
+
+.main-title .title-text,
+.main-title .subtitle-text,
+.footer {
+  transition: none;
+}
+
+.drop-zone.error-dismissing .main-title .title-text,
+.drop-zone.error-dismissing .main-title .subtitle-text,
+.drop-zone.error-dismissing .footer {
+  transition: opacity 0.3s ease;
+}
+
+.drop-zone.error-state .main-title .title-text,
+.drop-zone.error-state .main-title .subtitle-text,
+.drop-zone.error-state .footer {
+  opacity: 0;
+}
+
+.error-face {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   text-align: center;
+  opacity: 0;
+  pointer-events: none;
 }
 
-.error.active {
-  display: block;
+.drop-zone.error-dismissing .error-face {
+  transition: opacity 0.3s ease;
 }
 
-.error p {
-  color: var(--color-scale-gray-1);
-  font-size: 0.9rem;
+.drop-zone.error-state .error-face {
+  opacity: 1;
+  animation: error-shake 0.5s ease;
+}
+
+@keyframes error-shake {
+  0%, 100% { transform: translate(-50%, -50%); }
+  10%, 30%, 50%, 70%, 90% { transform: translate(calc(-50% - 8px), -50%); }
+  20%, 40%, 60%, 80% { transform: translate(calc(-50% + 8px), -50%); }
+}
+
+.error-face-emoji {
+  font-family: 'Spline Sans Mono', monospace;
+  font-size: clamp(48px, 10vw, 80px);
+  font-weight: 700;
+  color: white;
+  line-height: 1;
+}
+
+.error-face-message {
+  margin-top: 40px;
+  font-family: 'Work Sans', sans-serif;
+  font-size: clamp(16px, 3vw, 20px);
+  color: white;
+  max-width: 500px;
 }
 
 .report-frame {
@@ -502,5 +540,5 @@ input[type='file'] {
 }
 
 #drag-overlay-canvas.active {
-  display: block;
+  display: block !important;
 }
