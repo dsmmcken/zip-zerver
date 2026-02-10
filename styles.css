@@ -30,6 +30,7 @@ body {
   display: flex;
   flex-direction: column;
   padding: 30px;
+  overflow-x: hidden;
 }
 
 code {
@@ -541,4 +542,30 @@ input[type='file'] {
 
 #drag-overlay-canvas.active {
   display: block !important;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 480px) {
+  .drop-zone {
+    padding: 20px;
+  }
+
+  .drop-zone-content {
+    padding: 20px 10px;
+  }
+
+  .main-title {
+    width: 100%;
+  }
+
+  .top-buttons {
+    top: 38px;
+    right: 38px;
+  }
+
+  #why-popover {
+    right: 10px;
+    left: 10px;
+    max-width: none;
+  }
 }
